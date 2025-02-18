@@ -13,6 +13,13 @@ from modules.model import DevignModel, GGNNSum
 from trainer import train
 from utils import tally_param, debug
 
+"""
+Main functions in a straight forward manner.
+However, no data/datasets are provided and I'm not sure where to get them.
+
+Trains with BCE loss and Adam optimiser <- to change this to work with ReVeal, we need to introduce a triplet loss.
+This shouldn't be too hard, I've done this before.
+"""
 
 if __name__ == '__main__':
     torch.manual_seed(1000)
