@@ -3,7 +3,7 @@
 In this repository, we provide lightweight implementation of [Devign: Effective Vulnerability Identification by Learning Comprehensive Program Semantics via Graph Neural Networks](https://arxiv.org/pdf/1909.03496.pdf). 
 
 ### Requirements
-1. Python=3.6 
+1. Python==3.6 
 2. Pytorch==1.4.0
 3. [Deep Graph Library](https://www.dgl.ai/)
 
