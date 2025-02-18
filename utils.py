@@ -10,7 +10,7 @@ def load_default_identifiers(n: str, g: str, l: str):
     
     Args:
         n (str): Key for node features (None to use default)
-        g (str): Key for graph edges (None to use default)
+        g (str): Key for graph feature (None to use default)
         l (str): Key for labels (None to use default)
         
     Returns:
@@ -85,13 +85,7 @@ def debug(*msg, sep='\t'):
     Args:
         *msg: Variable number of message components to print
         sep (str): Separator between message components (default: tab)
-        
-    Format:
-        [timestamp] File "filename", line XX    message1    message2    ...
-        
-    Example:
-        >>> debug("Loading data", "size=100")
-        [01/01/2025 - 12:00:00] File "train.py", line 42    Loading data    size=100
+
     """
     # Get caller information
     caller = inspect.stack()[1]
