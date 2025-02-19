@@ -138,7 +138,7 @@ class GGNNSum(nn.Module):
         """Forward pass of the GGNN-Sum model.
         
         Args:
-            batch (?): Batched graph data
+            batch (BatchGraph): Batched graph data
             cuda (bool): Whether to use GPU acceleration
             
         Returns:
