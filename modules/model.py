@@ -154,7 +154,7 @@ class GGNNSum(nn.Module):
         # Get graph inputs
         graph, features, edge_types = batch.get_network_inputs(cuda=cuda)
         
-        # Apply GGNN for message passing
+        # Apply GGNN
         outputs = self.ggnn(graph, features, edge_types)
         
         # De-batchify and sum node embeddings
