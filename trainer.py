@@ -6,10 +6,27 @@ import torch
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 from tqdm import tqdm
 
+from data_loader.dataset import DataSet
 from utils import debug
 
 
-def evaluate_loss(model, loss_function, num_batches, data_iter, cuda=False):
+def evaluate_loss(model: torch.nn.Module, 
+                  loss_function: torch.nn.Module, 
+                  num_batches: int, 
+                  data_iter, 
+                  cuda: bool = False):
+    """Calculate loss and accuracy on a dataset split.
+    
+    Args:
+        model (nn.Module): Devign model to evaluate
+        loss_function: Loss criterion (e.g. BCELoss)
+        num_batches (int): Number of batches to evaluate
+        data_iter (?): Iterator function that returns (graph, targets)
+        cuda (bool): Whether to use GPU acceleration. Not used
+    
+    Returns:
+        tuple: (average_loss, accuracy_percentage)
+    """
     model.eval()
     with torch.no_grad():
         _loss = []
@@ -34,7 +51,25 @@ def evaluate_loss(model, loss_function, num_batches, data_iter, cuda=False):
     pass
 
 
-def evaluate_metrics(model, loss_function, num_batches, data_iter):
+def evaluate_metrics(model: torch.nn.Module, 
+                     loss_function: torch.nn.Module, 
+                     num_batches: int, 
+                     data_iter):
+    """Calculate metrics on dataset split.
+    
+    Args:
+        model (nn.Module): Devign model to evaluate
+        loss_function (nn.Module): Loss criterion (e.g. BCELoss)
+        num_batches (int): Number of batches to evaluate
+        data_iter: Iterator function that returns (graph, targets)
+        
+    Returns:
+        tuple: (accuracy, precision, recall, f1) percentages
+        
+    Note:
+        All metrics are computed on binary predictions (threshold=0.5)
+        and returned as percentages.
+    """
     model.eval()
     with torch.no_grad():
         _loss = []
@@ -62,12 +97,34 @@ def evaluate_metrics(model, loss_function, num_batches, data_iter):
     pass
 
 
-def train(model, dataset, max_steps, dev_every, loss_function, optimizer, save_path, log_every=50, max_patience=5):
+def train(model: torch.nn.Module, 
+          dataset: DataSet, 
+          max_steps: int,
+          dev_every: int,
+          loss_function: torch.nn.Module, 
+          optimizer: torch.optim.Optimizer,
+          save_path: str, 
+          log_every: int = 50,
+          max_patience: int = 5):
+    """Train Devign model with early stopping based on validation F1 score.
+    
+    Args:
+        model: Devign model to train
+        dataset (DataSet): Dataset container with train/valid splits
+        max_steps (int): Maximum training iterations
+        dev_every (int): Evaluate on validation set every N steps
+        loss_function: Loss criterion (e.g. BCELoss)
+        optimizer: Optimization algorithm
+        save_path (str): Path prefix for saving model checkpoints
+        log_every (int): Log training progress every N steps (default: 50)
+        max_patience (int): Early stopping patience (default: 5)
+        
+    """
     debug('Start Training')
-    train_losses = []
-    best_model = None
-    patience_counter = 0
-    best_f1 = 0
+    train_losses = []          # Track training losses between validations
+    best_model = None          # Store best model state
+    patience_counter = 0       # Count validations without improvement
+    best_f1 = 0               # Track best validation F1 score
     try:
         for step_count in range(max_steps):
             model.train()
