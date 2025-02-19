@@ -126,7 +126,7 @@ class GGNNSum(nn.Module):
         self.max_edge_types = max_edge_types
         self.num_timesteps = num_steps
         
-        # GGNN for message passing
+        # GGNN
         self.ggnn = GatedGraphConv(in_feats=input_dim, out_feats=output_dim, n_steps=num_steps,
                                    n_etypes=max_edge_types)
         # Linear layer for classification
