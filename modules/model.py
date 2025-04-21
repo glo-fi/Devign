@@ -43,7 +43,7 @@ class DevignModel(nn.Module):
         """Forward pass of the Devign model.
         
         Args:
-            batch (GGNNBatchGraph): Batched graph data
+            batch (BatchGraph): Batched graph data
             cuda (bool): Whether to use GPU acceleration
             
         Returns:
@@ -97,6 +97,17 @@ class DevignModel(nn.Module):
         avg = before_avg.mean(dim=1)                               # Mean pooling
         result = self.sigmoid(avg).squeeze(dim=-1)                 # Binary prediction
         return result
+    
+
+    def get_ggnn_embeddings(self, batch: BatchGraph, cuda: bool = False):
+        """
+        Returns the debatchified node embeddings from GGNN
+        without going through the final classification layers.
+        """
+        graph, features, edge_types = batch.get_network_inputs(cuda=cuda)
+        outputs = self.ggnn(graph, features, edge_types)  # shape: (total_nodes_in_batch, out_dim)
+        h_i, _ = batch.de_batchify_graphs(outputs)        # List/tensor of shape [B, N_i, out_dim]
+        return h_i
 
 
 class GGNNSum(nn.Module):

@@ -33,8 +33,8 @@ def evaluate_loss(model: torch.nn.Module,
         all_predictions, all_targets = [], []
         for _ in range(num_batches):
             graph, targets = data_iter()
-            targets = targets.cuda()
-            predictions = model(graph, cuda=True)
+            #targets = targets.cuda()
+            predictions = model(graph, cuda=False)
             batch_loss = loss_function(predictions, targets)
             _loss.append(batch_loss.detach().cpu().item())
             predictions = predictions.detach().cpu()
@@ -45,10 +45,11 @@ def evaluate_loss(model: torch.nn.Module,
                     predictions.ge(torch.ones(size=predictions.size()).fill_(0.5)).to(
                         dtype=torch.int32).numpy().tolist()
                 )
+            #predictions = torch.sigmoid(predictions).ge(0.5).int()
+            #all_predictions.extend(predictions.detach().cpu().numpy().tolist())
             all_targets.extend(targets.detach().cpu().numpy().tolist())
         model.train()
         return np.mean(_loss).item(), accuracy_score(all_targets, all_predictions) * 100
-    pass
 
 
 def evaluate_metrics(model: torch.nn.Module, 
@@ -76,26 +77,106 @@ def evaluate_metrics(model: torch.nn.Module,
         all_predictions, all_targets = [], []
         for _ in range(num_batches):
             graph, targets = data_iter()
-            targets = targets.cuda()
-            predictions = model(graph, cuda=True)
+            #targets = targets.cuda()
+            predictions = model(graph, cuda=False)
             batch_loss = loss_function(predictions, targets)
             _loss.append(batch_loss.detach().cpu().item())
             predictions = predictions.detach().cpu()
+            print("Inital Predictions: ", predictions)
+            #predictions = torch.sigmoid(predictions).ge(0.5).int()
+            #print("Sigmoid Predictions: ", predictions)
+
             if predictions.ndim == 2:
+                print("If Predictions: ", np.argmax(predictions.numpy(), axis=-1).tolist())
                 all_predictions.extend(np.argmax(predictions.numpy(), axis=-1).tolist())
             else:
+                print("Else Predictions: ", predictions.ge(torch.ones(size=predictions.size()).fill_(0.5)).to(dtype=torch.int32).numpy().tolist())
                 all_predictions.extend(
                     predictions.ge(torch.ones(size=predictions.size()).fill_(0.5)).to(
-                        dtype=torch.int32).numpy().tolist()
+                    dtype=torch.int32).numpy().tolist()
                 )
+            #all_predictions.extend(predictions.detach().cpu().numpy().tolist())
             all_targets.extend(targets.detach().cpu().numpy().tolist())
         model.train()
         return accuracy_score(all_targets, all_predictions) * 100, \
                precision_score(all_targets, all_predictions) * 100, \
                recall_score(all_targets, all_predictions) * 100, \
                f1_score(all_targets, all_predictions) * 100
-    pass
 
+def get_all_embeddings_for_dataset(model: torch.nn.Module, dataset: DataSet, cuda=False):
+    """
+    Iterates through all batches in 'dataset' using 'batch_initializer'
+    and 'batch_getter', returning a big tensor of GGNN embeddings.
+    
+    Args:
+        model: your DevignModel
+        dataset: your DataSet object
+        batch_initializer: function to initialize batch iteration
+        batch_getter: function to fetch the next batch
+        cuda: whether GPU is used
+        
+    Returns:
+        A list or tensor of embeddings for all samples in the dataset.
+        The shape might be irregular if each sample has a different # of nodes.
+    """
+    model.eval()
+    embeddings_list = []
+    with torch.no_grad():
+        num_batches = dataset.initialize_train_batch()  # Typically returns how many batches you can iterate
+        for _ in range(num_batches):
+            graph, _ = dataset.get_next_train_batch()
+            h_i = model.get_ggnn_embeddings(graph, cuda=cuda)
+            # h_i is shape [batch_size, #nodes, out_dim] if all graphs in that batch are same #nodes
+            # or a list if they differ. Adapt how you store it:
+            embeddings_list.append(h_i.cpu())
+    model.train()
+    
+    # You may want to combine them somehow (e.g., a list of [B, N_i, out_dim]),
+    # or just keep them separate in a Python list. Up to you:
+    return embeddings_list
+
+def save_all_embeddings_in_chunks(model, dataset: DataSet,
+                                  base_filename='saved_data/best_ggnn_embeddings_chunk',
+                                  cuda=False):
+    """
+    Iterates over the entire dataset in consecutive batches,
+    saving the embeddings for each batch into a separate file.
+
+    Args:
+        model: Your GNN model (with get_ggnn_embeddings method).
+        dataset: DataSet object.
+        batch_initializer: dataset.initialize_train_batch (or similar).
+        batch_getter: dataset.get_next_train_batch (or similar).
+        base_filename: prefix for chunk file naming.
+        cuda: whether GPU is used.
+
+    Returns:
+        Number of chunks saved, total number of samples (optional).
+    """
+    model.eval()
+    num_batches = dataset.initialize_train_batch()  # e.g., returns how many total train batches
+    chunk_idx = 0
+    total_samples = 0
+    with torch.no_grad():
+        for _ in range(num_batches):
+            graph, targets = dataset.get_next_train_batch()
+            h_i = model.get_ggnn_embeddings(graph, cuda=cuda)
+
+            chunk_data = {
+                "embeddings": h_i.cpu(),
+                "labels": targets.cpu() if targets.is_cuda else targets
+            }
+
+            this_chunk_filename = f"{base_filename}{chunk_idx}.pt"
+            torch.save(chunk_data, this_chunk_filename)
+            chunk_idx += 1
+
+            # Optionally track how many graphs or nodes were saved
+            # For example, if h_i is a list of length B:
+            total_samples += len(h_i)  # if each item is one graph
+    model.train()
+    
+    return chunk_idx, total_samples
 
 def train(model: torch.nn.Module, 
           dataset: DataSet, 
@@ -124,47 +205,76 @@ def train(model: torch.nn.Module,
     train_losses = []          # Track training losses between validations
     best_model = None          # Store best model state
     patience_counter = 0       # Count validations without improvement
-    best_f1 = 0               # Track best validation F1 score
+    best_f1 = 0              # Track best validation F1 score
     try:
-        for step_count in range(max_steps):
+        for step_count in tqdm(range(max_steps)):
             model.train()
             model.zero_grad()
             graph, targets = dataset.get_next_train_batch()
-            targets = targets.cuda()
-            predictions = model(graph, cuda=True)
+            #targets = targets.cuda()
+            predictions = model(graph, cuda=False)
             batch_loss = loss_function(predictions, targets)
-            if log_every is not None and (step_count % log_every == log_every - 1):
+            if step_count % log_every == (log_every - 1):
                 debug('Step %d\t\tTrain Loss %10.3f' % (step_count, batch_loss.detach().cpu().item()))
+                debug('=' * 100)
+            if dev_every is not None and (step_count % dev_every == dev_every - 1):
+                # --- Print debug info for training set ---
+                debug(f'Step {step_count}\t\tTrain Loss {batch_loss.item():.3f}')
+                train_acc, train_prec, train_recall, train_f1 = evaluate_metrics(
+                    model, loss_function,
+                    dataset.initialize_train_batch(),
+                    dataset.get_next_train_batch
+                )
+                debug(f"Train Metrics: Acc={train_acc:.2f}, Prec={train_prec:.2f}, "
+                    f"Rec={train_recall:.2f}, F1={train_f1:.2f}")
+
+                # --- Evaluate on validation set ---
+                valid_acc, valid_prec, valid_recall, valid_f1 = evaluate_metrics(
+                    model, loss_function,
+                    dataset.initialize_valid_batch(),
+                    dataset.get_next_valid_batch
+                )
+                debug(f"Valid Metrics: Acc={valid_acc:.2f}, Prec={valid_prec:.2f}, "
+                    f"Rec={valid_recall:.2f}, F1={valid_f1:.2f}")
+
+                # -- Check if we have new best F1; if so, overwrite embeddings --
+                if valid_f1 > best_f1:
+                    best_f1 = valid_f1
+
+                    # Gather embeddings for entire dataset (or entire train set, etc.)
+                    # Adjust these calls for whichever split(s) you want to save
+                    save_all_embeddings_in_chunks(
+                        model, dataset,
+                        cuda=False
+                    )
+                    # Overwrite the same file each time
+                    # debug(f"Saving Embedding Dataset")
+                    # embeddings_filename = "best_ggnn_embeddings.pt"
+                    # torch.save(train_embeddings, embeddings_filename)
+
+                    # Log the new best F1 in a separate text file (append mode)
+                    with open("best_scores_log.txt", "a") as f:
+                        f.write(f"New best F1={best_f1:.2f} at step={step_count}\n")
+
+                    # debug(f"Overwrote {embeddings_filename} with new best F1={best_f1:.2f}")
             train_losses.append(batch_loss.detach().cpu().item())
             batch_loss.backward()
             optimizer.step()
-            if step_count % dev_every == (dev_every - 1):
-                valid_loss, valid_f1 = evaluate_loss(model, loss_function, dataset.initialize_train_batch(),
-                                                     dataset.get_next_train_batch)
-                if valid_f1 > best_f1:
-                    patience_counter = 0
-                    best_f1 = valid_f1
-                    best_model = copy.deepcopy(model.state_dict())
-                    _save_file = open(save_path + '-model.bin', 'wb')
-                    torch.save(model.state_dict(), _save_file)
-                    _save_file.close()
-                else:
-                    patience_counter += 1
-                debug('Step %d\t\tTrain Loss %10.3f\tValid Loss%10.3f\tf1: %5.2f\tPatience %d' % (
-                    step_count, np.mean(train_losses).item(), valid_loss, valid_f1, patience_counter))
-                debug('=' * 100)
-                train_losses = []
-                if patience_counter == max_patience:
-                    break
+                #valid_loss, valid_f1 = evaluate_loss(model, loss_function, dataset.initialize_valid_batch(),
+                #                                     dataset.get_next_valid_batch)
+                #if valid_f1 > best_f1:
+                #    patience_counter = 0
+                #    best_f1 = valid_f1
+                    #best_model = copy.deepcopy(model.state_dict())
+                    #_save_file = open(save_path + '-model.bin', 'wb')
+                    #torch.save(best_model.state_dict(), _save_file)
+                    #_save_file.close()
+                #else:
+                #    patience_counter += 1
+                #debug('Step %d\t\tTrain Loss %10.3f\tValid Loss%10.3f\tf1: %5.2f\tPatience %d' % (
+                #    step_count, np.mean(train_losses).item(), valid_loss, valid_f1, patience_counter))
+                #train_losses = []
+                #if patience_counter == max_patience:
+                #    break
     except KeyboardInterrupt:
         debug('Training Interrupted by user!')
-
-    if best_model is not None:
-        model.load_state_dict(best_model)
-    _save_file = open(save_path + '-model.bin', 'wb')
-    torch.save(model.state_dict(), _save_file)
-    _save_file.close()
-    acc, pr, rc, f1 = evaluate_metrics(model, loss_function, dataset.initialize_train_batch(),
-                                       dataset.get_next_train_batch)
-    debug('%s\tTest Accuracy: %0.2f\tPrecision: %0.2f\tRecall: %0.2f\tF1: %0.2f' % (save_path, acc, pr, rc, f1))
-    debug('=' * 100)

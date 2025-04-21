@@ -1,7 +1,9 @@
 import copy
 import json
 import os
-
+import numpy as np
+import sys
+sys.path.append(".")
 
 import torch
 from dgl import DGLGraph
@@ -47,10 +49,11 @@ class DataSet:
         self.max_etype = 0
         self.feature_size = 0
         self.n_ident, self.g_ident, self.l_ident = load_default_identifiers(n_ident, g_ident, l_ident)
-        self.read_dataset(test_src, train_src, valid_src)
-        self.initialize_dataset()
+        self.read_dataset(train_src, valid_src, test_src)
+        self.initialize_dataset(valid_src, test_src)
 
-    def initialize_dataset(self):
+    def initialize_dataset(self, valid_src: str | os.PathLike = None, 
+                                 test_src: str | os.PathLike = None):
         """Initialise all dataset splits with batches.
         
         Calls utils.initialize_batch() on train/valid/test examples using default batch size
@@ -58,12 +61,14 @@ class DataSet:
         Train batches are shuffled, while valid/test maintain deterministic order.
         """
         self.initialize_train_batch()
-        self.initialize_valid_batch()
-        self.initialize_test_batch()
+        if valid_src is not None:
+            self.initialize_valid_batch()
+        if test_src is not None:
+            self.initialize_test_batch()
 
-    def read_dataset(self, test_src : str | os.PathLike,
-                     train_src : str | os.PathLike, 
-                     valid_src: str | os.PathLike):
+    def read_dataset(self, train_src : str | os.PathLike,
+                     valid_src : str | os.PathLike, 
+                     test_src: str | os.PathLike):
         """Load and parse graph data from JSON files into DataEntry objects.
         
         Args:
@@ -81,31 +86,37 @@ class DataSet:
         # Load training data first to initialise feature size
         debug('Reading Train File!')
         with open(train_src) as fp:
+            i = 0
             train_data = json.load(fp)
             for entry in tqdm(train_data):
-                example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
-                                    edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
-                if self.feature_size == 0:
-                    self.feature_size = example.features.size(1)
-                    debug('Feature Size %d' % self.feature_size)
-                self.train_examples.append(example)
+                if i < 10000:
+                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
+                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                    if self.feature_size == 0:
+                        self.feature_size = example.features.size(1)
+                        debug('Feature Size %d' % self.feature_size)
+                    self.train_examples.append(example)
+                i += 0
         # Then loop over validation file
         if valid_src is not None:
             debug('Reading Validation File!')
             with open(valid_src) as fp:
+                i = 0
                 valid_data = json.load(fp)
                 for entry in tqdm(valid_data):
-                    example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
-                                        features=entry[self.n_ident],
-                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
-                    self.valid_examples.append(example)
+                    if i < 1000:
+                        example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
+                                            features=entry[self.n_ident],
+                                            edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                        self.valid_examples.append(example)
+                    i += 0
         # Then test file
         if test_src is not None:
             debug('Reading Test File!')
             with open(test_src) as fp:
                 test_data = json.load(fp)
                 for entry in tqdm(test_data):
-                    example = DataEntry(datset=self, num_nodes=len(entry[self.n_ident]),
+                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
                     self.test_examples.append(example)
@@ -282,4 +293,7 @@ class DataEntry:
         self.graph.add_nodes(self.num_nodes, data={'features': self.features})
         for s, _type, t in edges:
             etype_number = self.dataset.get_edge_type_number(_type)
-            self.graph.add_edge(s, t, data={'etype': torch.LongTensor([etype_number])})
+            self.graph.add_edges(s, t, data={'etype': torch.LongTensor([etype_number])})
+
+if __name__ == "__main__":
+    DataSet(train_src="/home/rob/Documents/PhD/Work/MyReVeal/ReVeal/fixed/data/processed/sysevr/ggnn.json")

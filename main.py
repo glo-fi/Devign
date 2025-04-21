@@ -17,11 +17,12 @@ from utils import tally_param, debug
 Main functions in a straight forward manner.
 However, no data/datasets are provided and I'm not sure where to get them.
 
-Trains with BCE loss and Adam optimiser <- to change this to work with ReVeal, we need to introduce a triplet loss.
-This shouldn't be too hard, I've done this before.
+Trains with BCE loss and Adam optimiser
+
 """
 
 if __name__ == '__main__':
+    """
     torch.manual_seed(1000)
     np.random.seed(1000)
     parser = argparse.ArgumentParser()
@@ -80,3 +81,12 @@ if __name__ == '__main__':
     train(model=model, dataset=dataset, max_steps=1000000, dev_every=128,
           loss_function=loss_function, optimizer=optim,
           save_path=model_dir + '/GGNNSumModel', max_patience=100, log_every=None)
+        """
+    dataset = DataSet(train_src="./new_ggnn.json", valid_src="./new_ggnn.json", batch_size=128)
+    model = DevignModel(input_dim=dataset.feature_size, output_dim=196,
+                            num_steps=6, max_edge_types=dataset.max_edge_type)
+    loss_function = BCELoss(reduction='mean')
+    optim = Adam(model.parameters(), lr=0.0001, weight_decay=0.001) # original, got decent results with LR=0.001 and no weight decay
+    train(model=model, dataset=dataset, max_steps=50000, dev_every=100,
+          loss_function=loss_function, optimizer=optim,
+          save_path='whocares/GGNNSumModel', max_patience=100, log_every=10)
