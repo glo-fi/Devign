@@ -87,10 +87,10 @@ def evaluate_metrics(model: torch.nn.Module,
             #print("Sigmoid Predictions: ", predictions)
 
             if predictions.ndim == 2:
-                print("If Predictions: ", np.argmax(predictions.numpy(), axis=-1).tolist())
+                #print("If Predictions: ", np.argmax(predictions.numpy(), axis=-1).tolist())
                 all_predictions.extend(np.argmax(predictions.numpy(), axis=-1).tolist())
             else:
-                print("Else Predictions: ", predictions.ge(torch.ones(size=predictions.size()).fill_(0.5)).to(dtype=torch.int32).numpy().tolist())
+                #print("Else Predictions: ", predictions.ge(torch.ones(size=predictions.size()).fill_(0.5)).to(dtype=torch.int32).numpy().tolist())
                 all_predictions.extend(
                     predictions.ge(torch.ones(size=predictions.size()).fill_(0.5)).to(
                     dtype=torch.int32).numpy().tolist()
