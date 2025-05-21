@@ -82,11 +82,11 @@ if __name__ == '__main__':
           loss_function=loss_function, optimizer=optim,
           save_path=model_dir + '/GGNNSumModel', max_patience=100, log_every=None)
         """
-    dataset = DataSet(train_src="./new_ggnn.json", valid_src="./new_ggnn.json", batch_size=128)
+    dataset = DataSet(train_src="./ggnn_train_new.json", valid_src="./ggnn_valid_new.json", batch_size=128)
     model = DevignModel(input_dim=dataset.feature_size, output_dim=196,
                             num_steps=6, max_edge_types=dataset.max_edge_type)
     loss_function = BCELoss(reduction='mean')
     optim = Adam(model.parameters(), lr=0.0001, weight_decay=0.001) # original, got decent results with LR=0.001 and no weight decay
-    train(model=model, dataset=dataset, max_steps=50000, dev_every=100,
+    train(model=model, dataset=dataset, max_steps=50000, dev_every=25,
           loss_function=loss_function, optimizer=optim,
-          save_path='whocares/GGNNSumModel', max_patience=100, log_every=10)
+          save_path='whocares/GGNNSumModel', max_patience=100, log_every=5)

@@ -8,7 +8,6 @@ sys.path.append(".")
 import torch
 from dgl import DGLGraph
 from tqdm import tqdm
-
 from data_loader.batch_graph import GGNNBatchGraph
 from utils import load_default_identifiers, initialize_batch, debug
 
@@ -91,7 +90,8 @@ class DataSet:
             for entry in tqdm(train_data):
                 if i < 10000:
                     example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
-                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0],
+                                        name=entry["file_name"])
                     if self.feature_size == 0:
                         self.feature_size = example.features.size(1)
                         debug('Feature Size %d' % self.feature_size)
@@ -107,7 +107,8 @@ class DataSet:
                     if i < 1000:
                         example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
                                             features=entry[self.n_ident],
-                                            edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                                            edges=entry[self.g_ident], target=entry[self.l_ident][0][0],
+                                            name=entry["file_name"])
                         self.valid_examples.append(example)
                     i += 0
         # Then test file
@@ -118,7 +119,8 @@ class DataSet:
                 for entry in tqdm(test_data):
                     example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
                                         features=entry[self.n_ident],
-                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0])
+                                        edges=entry[self.g_ident], target=entry[self.l_ident][0][0], 
+                                        name=entry["file_name"])
                     self.test_examples.append(example)
 
     def get_edge_type_number(self, _type: str):
@@ -208,12 +210,14 @@ class DataSet:
         taken_entries = [entries[i] for i in ids]
         # Extract vulnerability labels
         labels = [e.target for e in taken_entries]
+        # Get filenames
+        names = [e.name for e in taken_entries]
         # Create batch graph container
         batch_graph = GGNNBatchGraph()
         # Add each graph's structure and features (using deep copy to preserve originals)
         for entry in taken_entries:
             batch_graph.add_subgraph(copy.deepcopy(entry.graph))
-        return batch_graph, torch.FloatTensor(labels)
+        return batch_graph, torch.FloatTensor(labels), names
 
     def get_next_train_batch(self):
         """Get next batch of training examples.
@@ -284,8 +288,9 @@ class DataEntry:
         edges (list): Edge list as tuples (source, edge_type, target)
         target (int): Vulnerability classification label
     """
-    def __init__(self, dataset: DataSet, num_nodes: int, features, edges, target: int):
+    def __init__(self, dataset: DataSet, num_nodes: int, features, edges, target: int, name: str):
         self.dataset = dataset
+        self.name = name
         self.num_nodes = num_nodes
         self.target = target
         self.graph = DGLGraph()

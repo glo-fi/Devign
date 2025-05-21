@@ -32,7 +32,7 @@ def evaluate_loss(model: torch.nn.Module,
         _loss = []
         all_predictions, all_targets = [], []
         for _ in range(num_batches):
-            graph, targets = data_iter()
+            graph, targets, _ = data_iter()
             #targets = targets.cuda()
             predictions = model(graph, cuda=False)
             batch_loss = loss_function(predictions, targets)
@@ -76,13 +76,13 @@ def evaluate_metrics(model: torch.nn.Module,
         _loss = []
         all_predictions, all_targets = [], []
         for _ in range(num_batches):
-            graph, targets = data_iter()
+            graph, targets, _ = data_iter()
             #targets = targets.cuda()
             predictions = model(graph, cuda=False)
             batch_loss = loss_function(predictions, targets)
             _loss.append(batch_loss.detach().cpu().item())
             predictions = predictions.detach().cpu()
-            print("Inital Predictions: ", predictions)
+            #print("Inital Predictions: ", predictions)
             #predictions = torch.sigmoid(predictions).ge(0.5).int()
             #print("Sigmoid Predictions: ", predictions)
 
@@ -124,7 +124,7 @@ def get_all_embeddings_for_dataset(model: torch.nn.Module, dataset: DataSet, cud
     with torch.no_grad():
         num_batches = dataset.initialize_train_batch()  # Typically returns how many batches you can iterate
         for _ in range(num_batches):
-            graph, _ = dataset.get_next_train_batch()
+            graph, _, _ = dataset.get_next_train_batch()
             h_i = model.get_ggnn_embeddings(graph, cuda=cuda)
             # h_i is shape [batch_size, #nodes, out_dim] if all graphs in that batch are same #nodes
             # or a list if they differ. Adapt how you store it:
@@ -159,12 +159,13 @@ def save_all_embeddings_in_chunks(model, dataset: DataSet,
     total_samples = 0
     with torch.no_grad():
         for _ in range(num_batches):
-            graph, targets = dataset.get_next_train_batch()
+            graph, targets, names = dataset.get_next_train_batch()
             h_i = model.get_ggnn_embeddings(graph, cuda=cuda)
 
             chunk_data = {
                 "embeddings": h_i.cpu(),
-                "labels": targets.cpu() if targets.is_cuda else targets
+                "labels": targets.cpu() if targets.is_cuda else targets,
+                "names": names
             }
 
             this_chunk_filename = f"{base_filename}{chunk_idx}.pt"
@@ -210,12 +211,23 @@ def train(model: torch.nn.Module,
         for step_count in tqdm(range(max_steps)):
             model.train()
             model.zero_grad()
-            graph, targets = dataset.get_next_train_batch()
+            graph, targets, names = dataset.get_next_train_batch()
             #targets = targets.cuda()
             predictions = model(graph, cuda=False)
             batch_loss = loss_function(predictions, targets)
             if step_count % log_every == (log_every - 1):
-                debug('Step %d\t\tTrain Loss %10.3f' % (step_count, batch_loss.detach().cpu().item()))
+                train_loss, train_acc = evaluate_loss(
+                    model, loss_function,
+                    dataset.initialize_train_batch(),
+                    dataset.get_next_train_batch
+                )
+                valid_loss, valid_acc = evaluate_loss(
+                    model, loss_function,
+                    dataset.initialize_valid_batch(),
+                    dataset.get_next_valid_batch
+                )
+                debug('Step %d\t\tTrain Loss %10.3f Train Acc %10.3f' % (step_count, train_loss, train_acc))
+                debug('Step %d\t\tValid Loss %10.3f Valid Acc %10.3f' % (step_count, valid_loss, valid_acc))
                 debug('=' * 100)
             if dev_every is not None and (step_count % dev_every == dev_every - 1):
                 # --- Print debug info for training set ---
