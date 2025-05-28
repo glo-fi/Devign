@@ -85,32 +85,26 @@ class DataSet:
         # Load training data first to initialise feature size
         debug('Reading Train File!')
         with open(train_src) as fp:
-            i = 0
             train_data = json.load(fp)
             for entry in tqdm(train_data):
-                if i < 10000:
-                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
+                example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]), features=entry[self.n_ident],
                                         edges=entry[self.g_ident], target=entry[self.l_ident][0][0],
                                         name=entry["file_name"])
-                    if self.feature_size == 0:
-                        self.feature_size = example.features.size(1)
-                        debug('Feature Size %d' % self.feature_size)
-                    self.train_examples.append(example)
-                i += 0
+                if self.feature_size == 0:
+                    self.feature_size = example.features.size(1)
+                    debug('Feature Size %d' % self.feature_size)
+                self.train_examples.append(example)
         # Then loop over validation file
         if valid_src is not None:
             debug('Reading Validation File!')
             with open(valid_src) as fp:
-                i = 0
                 valid_data = json.load(fp)
                 for entry in tqdm(valid_data):
-                    if i < 1000:
-                        example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
+                    example = DataEntry(dataset=self, num_nodes=len(entry[self.n_ident]),
                                             features=entry[self.n_ident],
                                             edges=entry[self.g_ident], target=entry[self.l_ident][0][0],
                                             name=entry["file_name"])
-                        self.valid_examples.append(example)
-                    i += 0
+                    self.valid_examples.append(example)
         # Then test file
         if test_src is not None:
             debug('Reading Test File!')
